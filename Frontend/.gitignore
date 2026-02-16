@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.*
+API keys
+*.log
+.DS_Store
