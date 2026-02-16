@@ -1,19 +1,34 @@
 import { UploadCloud, Video, Cpu, FileText } from "lucide-react";
-import { motion } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { uploadVideo } from "../services/api";
 
 export default function Hero() {
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const openFilePicker = () => {
-    fileInputRef.current.click();
+    fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      alert(`Selected: ${file.name}`);
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("video/")) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await uploadVideo(file);
+      navigate("/dashboard/wrong-way", { state: { videoUrl: data.video_url } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setLoading(false);
     }
+    e.target.value = "";
   };
 
   return (
@@ -55,10 +70,11 @@ export default function Hero() {
           {/* Upload Button */}
           <button
             onClick={openFilePicker}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-lg transition"
           >
             <Video className="w-4 h-4" />
-            Upload Traffic Video
+            {loading ? "Processing..." : "Upload Traffic Video"}
           </button>
 
           {/* AI Detection */}
@@ -104,10 +120,14 @@ export default function Hero() {
     {/* Button */}
     <button
       onClick={openFilePicker}
-      className="mt-8 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 rounded-lg font-medium shadow-lg transition-all duration-300 hover:shadow-blue-500/40"
+      disabled={loading}
+      className="mt-8 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-70 text-white py-3 rounded-lg font-medium shadow-lg transition-all duration-300 hover:shadow-blue-500/40"
     >
-      Choose Video File
+      {loading ? "Processing..." : "Choose Video File"}
     </button>
+    {error && (
+      <p className="mt-3 text-sm text-red-400">{error}</p>
+    )}
 
     {/* Drag text */}
     <p className="text-xs text-gray-400 mt-4">
