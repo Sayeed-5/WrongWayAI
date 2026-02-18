@@ -251,6 +251,12 @@ async def upload_video(file: UploadFile = File(...)):
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
                     current_center = (center_x, center_y)
+                    
+                    # Class label (works for COCO + custom models)
+                    try:
+                        cls_name = model.names.get(cls, str(cls)) if isinstance(model.names, dict) else model.names[cls]
+                    except Exception:
+                        cls_name = str(cls)
 
                     # Update history
                     if track_id not in track_history:
@@ -284,7 +290,7 @@ async def upload_video(file: UploadFile = File(...)):
                         if is_wrong_way:
                             # Draw Warning
                             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                            cv2.putText(frame, f"WRONG WAY {track_id}", (x1, y1 - 10), 
+                            cv2.putText(frame, f"WRONG WAY {cls_name} {track_id}", (x1, y1 - 10), 
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                             
                             if track_id not in flagged_ids:
@@ -299,6 +305,8 @@ async def upload_video(file: UploadFile = File(...)):
                         else:
                             # Correct Way - Green Box
                              cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                             cv2.putText(frame, f"{cls_name} {track_id}", (x1, y1 - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                              # Debug Text
                              # cv2.putText(frame, f"{dy}", (x1, y1-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
 
