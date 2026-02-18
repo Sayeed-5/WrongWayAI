@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import LiveMonitoring from './pages/LiveMonitoring';
 import WrongWayDetection from './pages/WrongWayDetection';
 import NumberPlateRecognition from './pages/NumberPlateRecognition';
+import ViolationReports from './pages/ViolationReports';
 import DashboardLayout from './layouts/DashboardLayout';
 import SoftBackdrop from './components/SoftBackdrop';
 import Footer from './components/Footer';
@@ -24,6 +25,7 @@ function App() {
 					<Route path="live" element={<LiveMonitoring />} />
 					<Route path="wrong-way" element={<WrongWayDetection />} />
 					<Route path="anpr" element={<NumberPlateRecognition />} />
+					<Route path="violations" element={<ViolationReports />} />
 				</Route>
 			</Routes>
 		</>

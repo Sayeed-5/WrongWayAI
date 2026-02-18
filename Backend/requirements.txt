@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+opencv-python
+ultralytics
+imageio
+python-multipart
+fastapi
+uvicorn
+opencv-python
+ultralytics
+imageio[ffmpeg]
+python-multipart
+
