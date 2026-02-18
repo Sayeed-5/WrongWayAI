@@ -1,21 +1,17 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 import cv2
-from ultralytics import YOLO
 import os
 import time
 import subprocess
 import shutil
 
-app = FastAPI()
+from ultralytics import YOLO
+from deep_sort_realtime.deepsort_tracker import DeepSort
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,14 +21,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_VIDEO_PATH = os.path.join(BACKEND_DIR, "output.mp4")
-OUTPUT_TEMP_PATH = os.path.join(BACKEND_DIR, "output_temp.mp4")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_PATH = os.path.join(BASE_DIR, "input.mp4")
+TEMP_OUTPUT_PATH = os.path.join(BASE_DIR, "temp_output.mp4")
+FINAL_OUTPUT_PATH = os.path.join(BASE_DIR, "output.mp4")
 
+# Load model
 model = YOLO("yolov8n.pt")
 
+# Deep SORT tracker
+tracker = DeepSort(max_age=30)
 
-def _reencode_for_browser(source: str, dest: str) -> bool:
+LEGAL_DIRECTION = "UP"  # bottom -> top is legal
+DIRECTION_THRESHOLD = 30  # pixels
+
+def reencode_video(source, dest):
     try:
         subprocess.run(
             [
@@ -47,52 +50,37 @@ def _reencode_for_browser(source: str, dest: str) -> bool:
             capture_output=True,
         )
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except Exception:
         return False
 
 
 @app.get("/video")
 def get_video():
-    if not os.path.exists(OUTPUT_VIDEO_PATH):
-        raise HTTPException(status_code=404, detail="No processed video yet.")
-    return FileResponse(
-        OUTPUT_VIDEO_PATH,
-        media_type="video/mp4",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
-    )
+    if not os.path.exists(FINAL_OUTPUT_PATH):
+        raise HTTPException(status_code=404, detail="No processed video.")
+    return FileResponse(FINAL_OUTPUT_PATH, media_type="video/mp4")
 
 
 @app.post("/upload/")
 async def upload_video(file: UploadFile = File(...)):
 
-    input_path = os.path.join(BACKEND_DIR, "input.mp4")
-    output_path = OUTPUT_TEMP_PATH
-
-    with open(input_path, "wb") as f:
+    with open(INPUT_PATH, "wb") as f:
         f.write(await file.read())
 
-    cap = cv2.VideoCapture(input_path)
+    cap = cv2.VideoCapture(INPUT_PATH)
 
     fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps == 0 or fps is None:
+    if not fps or fps == 0:
         fps = 20
 
     frame_width = 640
     frame_height = 480
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(
-        output_path,
-        fourcc,
-        fps,
-        (frame_width, frame_height)
-    )
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(TEMP_OUTPUT_PATH, fourcc, fps, (frame_width, frame_height))
 
-    prev_centers = []
+    object_positions = {}
+    wrong_ids = set()
 
     while True:
         ret, frame = cap.read()
@@ -100,40 +88,71 @@ async def upload_video(file: UploadFile = File(...)):
             break
 
         frame = cv2.resize(frame, (frame_width, frame_height))
-        results = model(frame)
 
-        current_centers = []
+        results = model(frame, conf=0.25)
+
+        detections = []
 
         for r in results:
             boxes = r.boxes.xyxy.cpu().numpy()
             classes = r.boxes.cls.cpu().numpy()
 
             for box, cls in zip(boxes, classes):
-                if int(cls) == 2:  # car
+                if int(cls) in [2, 3, 5, 7]:  # car, motorcycle, bus, truck
                     x1, y1, x2, y2 = map(int, box)
-                    center = ((x1 + x2) // 2, (y1 + y2) // 2)
-                    current_centers.append((x1, y1, x2, y2, center))
+                    w = x2 - x1
+                    h = y2 - y1
+                    detections.append(([x1, y1, w, h], 1.0, "vehicle"))
 
-        # Compare with previous frame
-        if prev_centers:
-            for (x1, y1, x2, y2, center), prev in zip(current_centers, prev_centers):
-                movement = center[1] - prev[1]
+        tracks = tracker.update_tracks(detections, frame=frame)
 
-                # UPWARD movement → WRONG
-                if movement < -5:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(
-                        frame,
-                        "WRONG WAY",
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        (0, 0, 255),
-                        2
-                    )
+        for track in tracks:
+            if not track.is_confirmed():
+                continue
 
-        # Store current centers for next frame
-        prev_centers = [c[4] for c in current_centers]
+            track_id = track.track_id
+            l, t, r, b = track.to_ltrb()
+            l, t, r, b = int(l), int(t), int(r), int(b)
+
+            center_y = (t + b) // 2
+
+            # First appearance
+            if track_id not in object_positions:
+                object_positions[track_id] = {
+                    "initial_y": center_y
+                }
+                continue
+
+            initial_y = object_positions[track_id]["initial_y"]
+            total_movement = center_y - initial_y
+
+            is_wrong = False
+
+            if LEGAL_DIRECTION == "UP":
+                if total_movement > DIRECTION_THRESHOLD:
+                    is_wrong = True
+            else:
+                if total_movement < -DIRECTION_THRESHOLD:
+                    is_wrong = True
+
+            if is_wrong:
+                wrong_ids.add(track_id)
+                color = (0, 0, 255)
+                label = "WRONG WAY"
+            else:
+                color = (0, 255, 0)
+                label = "OK"
+
+            cv2.rectangle(frame, (l, t), (r, b), color, 2)
+            cv2.putText(
+                frame,
+                f"ID {track_id} - {label}",
+                (l, t - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
+            )
 
         out.write(frame)
 
@@ -141,19 +160,16 @@ async def upload_video(file: UploadFile = File(...)):
     out.release()
     cv2.destroyAllWindows()
 
-    # Re-encode to browser-friendly H264
-    if _reencode_for_browser(OUTPUT_TEMP_PATH, OUTPUT_VIDEO_PATH):
-        try:
-            os.remove(OUTPUT_TEMP_PATH)
-        except OSError:
-            pass
+    if reencode_video(TEMP_OUTPUT_PATH, FINAL_OUTPUT_PATH):
+        os.remove(TEMP_OUTPUT_PATH)
     else:
-        shutil.copy(OUTPUT_TEMP_PATH, OUTPUT_VIDEO_PATH)
-        try:
-            os.remove(OUTPUT_TEMP_PATH)
-        except OSError:
-            pass
+        shutil.copy(TEMP_OUTPUT_PATH, FINAL_OUTPUT_PATH)
+        os.remove(TEMP_OUTPUT_PATH)
 
     timestamp = int(time.time() * 1000)
     video_url = f"http://localhost:8000/video?t={timestamp}"
-    return {"video_url": video_url}
+
+    return {
+        "video_url": video_url,
+        "wrong_vehicle_count": len(wrong_ids)
+    }
