@@ -295,6 +295,8 @@ async def upload_video(file: UploadFile = File(...)):
                     current_center = (center_x, center_y)
                     all_track_ids.add(track_id)
 
+                    class_name = results[0].names[cls]
+
                     if track_id not in track_history:
                         track_history[track_id] = []
                     track_history[track_id].append(current_center)
@@ -314,6 +316,7 @@ async def upload_video(file: UploadFile = File(...)):
                     history = track_history[track_id]
                     if len(history) < 5:
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(frame, f"{class_name}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                         continue
 
                     prev_x, prev_y = history[0]
@@ -337,7 +340,7 @@ async def upload_video(file: UploadFile = File(...)):
                         heatmap[y_lo:y_hi, x_lo:x_hi] += 1
 
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                        cv2.putText(frame, f"WRONG WAY {track_id}", (x1, y1 - 10),
+                        cv2.putText(frame, f"WRONG WAY {class_name}", (x1, y1 - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
                         if track_id not in flagged_ids:
@@ -360,6 +363,7 @@ async def upload_video(file: UploadFile = File(...)):
                             })
                     else:
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(frame, f"{class_name}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             writer.append_data(frame_rgb)

@@ -1,11 +1,11 @@
 {
-  "total_videos_processed": 0,
-  "total_tracked_vehicles": 0,
-  "total_wrong_way": 0,
-  "total_lane_changes": 0,
+  "total_videos_processed": 5,
+  "total_tracked_vehicles": 96,
+  "total_wrong_way": 17,
+  "total_lane_changes": 5,
   "violations_per_lane": {
-    "LEFT": 0,
-    "RIGHT": 0
+    "LEFT": 15,
+    "RIGHT": 2
   },
   "heatmap_accumulated": "heatmap.jpg"
 }
