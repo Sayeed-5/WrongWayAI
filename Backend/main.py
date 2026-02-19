@@ -1,29 +1,27 @@
+"""
+AI-Based Wrong-Way Vehicle Detection - Backend
+FastAPI + OpenCV + Ultralytics YOLOv8 + ByteTrack. No database.
+"""
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
+import numpy as np
 from ultralytics import YOLO
 import os
 import time
 import imageio
-import shutil
-import sqlite3
-from pydantic import BaseModel
-from typing import List
 
 app = FastAPI()
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,63 +29,40 @@ app.add_middleware(
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_VIDEO_PATH = os.path.join(BACKEND_DIR, "output.mp4")
-OUTPUT_TEMP_PATH = os.path.join(BACKEND_DIR, "output_temp.mp4")
+HEATMAP_PATH = os.path.join(BACKEND_DIR, "heatmap.jpg")
 VIOLATORS_DIR = os.path.join(BACKEND_DIR, "violators")
-DB_PATH = os.path.join(BACKEND_DIR, "violations.db")
 
-# Ensure directory exists
-if not os.path.exists(VIOLATORS_DIR):
-    os.makedirs(VIOLATORS_DIR)
-
-# Mount static files for accessing images
+os.makedirs(VIOLATORS_DIR, exist_ok=True)
 app.mount("/violators", StaticFiles(directory=VIOLATORS_DIR), name="violators")
 
-# Database Setup
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS violations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            track_id INTEGER,
-            timestamp INTEGER,
-            image_path TEXT,
-            video_timestamp TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-def log_violation(track_id, image_filename):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO violations (track_id, timestamp, image_path, video_timestamp) VALUES (?, ?, ?, ?)",
-        (track_id, int(time.time()), f"/violators/{image_filename}", "00:00")
-    )
-    conn.commit()
-    conn.close()
+# Model
+MODEL_FILES = ["indian_model.pt", "best.pt", "custom_yolov8.pt", "yolov8n.pt"]
 
 def load_model():
-    # Priority list for model files
-    model_files = ["indian_model.pt", "best.pt", "custom_yolov8.pt", "yolov8n.pt"]
-    
-    for model_file in model_files:
-        model_path = os.path.join(BACKEND_DIR, model_file)
-        if os.path.exists(model_path):
-            print(f"Loading model: {model_file}")
-            try:
-                return YOLO(model_path)
-            except Exception as e:
-                print(f"Failed to load {model_file}: {e}")
-    
-    # Fallback if nothing found (shouldn't happen if yolov8n.pt is tracked)
-    print("Warning: No model found! Attempting download of yolov8n.pt...")
+    for name in MODEL_FILES:
+        path = os.path.join(BACKEND_DIR, name)
+        if os.path.exists(path):
+            print(f"Loading model: {name}")
+            return YOLO(path)
+    print("Using yolov8n.pt")
     return YOLO("yolov8n.pt")
 
 model = load_model()
+
+MOVEMENT_THRESHOLD = 8
+MAX_HISTORY = 20
+VEHICLE_CLASSES = [2, 3, 5, 7]  # COCO: car, motorcycle, bus, truck
+
+
+@app.get("/heatmap")
+def get_heatmap():
+    if not os.path.exists(HEATMAP_PATH):
+        raise HTTPException(status_code=404, detail="No heatmap yet.")
+    return FileResponse(
+        HEATMAP_PATH,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/video")
@@ -97,129 +72,58 @@ def get_video():
     return FileResponse(
         OUTPUT_VIDEO_PATH,
         media_type="video/mp4",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"},
     )
-
-@app.get("/violations")
-def get_violations():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM violations ORDER BY timestamp DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.delete("/violations/{violation_id}")
-def delete_violation(violation_id: int):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT image_path FROM violations WHERE id = ?", (violation_id,))
-    row = cursor.fetchone()
-
-    if row is None:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Violation not found")
-
-    image_path = row[0] or ""
-
-    cursor.execute("DELETE FROM violations WHERE id = ?", (violation_id,))
-    conn.commit()
-    conn.close()
-
-    # Remove the corresponding image file if it exists
-    if image_path:
-        filename = os.path.basename(image_path)
-        file_path = os.path.join(VIOLATORS_DIR, filename)
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                # If deletion fails, we still consider the violation removed from DB
-                pass
-
-    return {"message": "Violation deleted"}
-
-@app.delete("/violations")
-def clear_violations():
-    # Clear DB
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM violations")
-    conn.commit()
-    conn.close()
-    
-    # Clear Images
-    if os.path.exists(VIOLATORS_DIR):
-        shutil.rmtree(VIOLATORS_DIR)
-    os.makedirs(VIOLATORS_DIR, exist_ok=True)
-    
-    return {"message": "All violations cleared"}
 
 
 @app.post("/upload/")
 async def upload_video(file: UploadFile = File(...)):
-
     input_path = os.path.join(BACKEND_DIR, "input.mp4")
-    
-    # Clean up previous output and violations (optional, keeping DB persistent for now)
-    # If you want to clear DB per run, uncomment:
-    # conn = sqlite3.connect(DB_PATH)
-    # conn.execute("DELETE FROM violations")
-    # conn.commit()
-    # conn.close()
-    
+
+    # Clear previous run: remove output and violators
     if os.path.exists(OUTPUT_VIDEO_PATH):
         try:
             os.remove(OUTPUT_VIDEO_PATH)
         except OSError:
             pass
-            
-    # if os.path.exists(VIOLATORS_DIR):
-    #     shutil.rmtree(VIOLATORS_DIR)
-    # os.makedirs(VIOLATORS_DIR, exist_ok=True)
+    for f in os.listdir(VIOLATORS_DIR):
+        try:
+            os.remove(os.path.join(VIOLATORS_DIR, f))
+        except OSError:
+            pass
+    if os.path.exists(HEATMAP_PATH):
+        try:
+            os.remove(HEATMAP_PATH)
+        except OSError:
+            pass
 
     with open(input_path, "wb") as f:
         f.write(await file.read())
 
     cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 20
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps == 0 or fps is None:
-        fps = 20
-
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    if frame_width == 0: frame_width = 640
-    if frame_height == 0: frame_height = 480
-
-    # improved video writing using imageio with explicit h264 codec
     writer = imageio.get_writer(
-        OUTPUT_VIDEO_PATH, 
-        fps=fps, 
-        codec='libx264', 
-        quality=8, 
-        pixelformat='yuv420p',
-        macro_block_size=None 
+        OUTPUT_VIDEO_PATH,
+        fps=fps,
+        codec="libx264",
+        quality=8,
+        pixelformat="yuv420p",
+        macro_block_size=None,
     )
 
-    # Dictionary to store tracking history: {track_id: [(x, y), ...]}
     track_history = {}
-    # Set to keep track of vehicles already flagged as wrong way to avoid duplicate saves
     flagged_ids = set()
-    
-    # Logic for Wrong Way
-    MOVEMENT_THRESHOLD = 8
-    LANE_SPLIT_X = frame_width // 2 # Assume road is split in middle
-    
-    # LHT (Left Hand Traffic) Rules:
-    # Left Lane (x < SPLIT): Vehicles should come DOWN (y increases). WRONG if y decreases (UP).
-    # Right Lane (x >= SPLIT): Vehicles should go UP (y decreases). WRONG if y increases (DOWN).
+    lane_memory = {}
+    violations = []
+    lane_changes = []
+    all_track_ids = set()
+    heatmap = np.zeros((frame_height, frame_width), dtype=np.float32)
+
+    LANE_SPLIT_X = frame_width // 2
+    frame_index = 0
 
     try:
         while True:
@@ -227,99 +131,112 @@ async def upload_video(file: UploadFile = File(...)):
             if not ret:
                 break
 
-            # frame = cv2.resize(frame, (frame_width, frame_height))
-            
-            # Draw Lane Divider
             cv2.line(frame, (LANE_SPLIT_X, 0), (LANE_SPLIT_X, frame_height), (255, 255, 0), 2)
             cv2.putText(frame, "DOWN (Allowed)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             cv2.putText(frame, "UP (Allowed)", (frame_width - 200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            # Use YOLO tracking; persist=True is crucial for video
-            results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False)
+            results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False, conf=0.6)
 
-            if results and results[0].boxes and results[0].boxes.id is not None:
+            if results and results[0].boxes is not None and results[0].boxes.id is not None:
                 boxes = results[0].boxes.xyxy.cpu().numpy()
                 track_ids = results[0].boxes.id.int().cpu().tolist()
                 classes = results[0].boxes.cls.int().cpu().tolist()
 
                 for box, track_id, cls in zip(boxes, track_ids, classes):
-                    # Filter for vehicles
-                    if cls not in [2, 3, 5, 7]:
-                         continue
+                    if cls not in VEHICLE_CLASSES:
+                        continue
 
                     x1, y1, x2, y2 = map(int, box)
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
                     current_center = (center_x, center_y)
-                    
-                    # Class label (works for COCO + custom models)
-                    try:
-                        cls_name = model.names.get(cls, str(cls)) if isinstance(model.names, dict) else model.names[cls]
-                    except Exception:
-                        cls_name = str(cls)
+                    all_track_ids.add(track_id)
 
-                    # Update history
                     if track_id not in track_history:
                         track_history[track_id] = []
-                    
                     track_history[track_id].append(current_center)
-                    
-                    if len(track_history[track_id]) > 30:
+                    if len(track_history[track_id]) > MAX_HISTORY:
                         track_history[track_id].pop(0)
 
-                    # Check movement
-                    history = track_history[track_id]
-                    if len(history) > 5:
-                        prev_x, prev_y = history[0]
-                        dy = center_y - prev_y
-                        
-                        is_wrong_way = False
-                        
-                        # Determine Lane
-                        if center_x < LANE_SPLIT_X:
-                            # LEFT LANE: Should move DOWN (dy > 0). 
-                            # Wrong if Moving UP significantly (dy < -threshold)
-                            if dy < -MOVEMENT_THRESHOLD:
-                                is_wrong_way = True
-                        else:
-                            # RIGHT LANE: Should move UP (dy < 0).
-                            # Wrong if Moving DOWN significantly (dy > threshold)
-                            if dy > MOVEMENT_THRESHOLD:
-                                is_wrong_way = True
-                        
-                        if is_wrong_way:
-                            # Draw Warning
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                            cv2.putText(frame, f"WRONG WAY {cls_name} {track_id}", (x1, y1 - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                            
-                            if track_id not in flagged_ids:
-                                flagged_ids.add(track_id)
-                                timestamp = int(time.time())
-                                violation_filename = f"violation_{timestamp}_{track_id}.jpg"
-                                violation_path = os.path.join(VIOLATORS_DIR, violation_filename)
-                                cv2.imwrite(violation_path, frame)
-                                
-                                # Log to DB
-                                log_violation(track_id, violation_filename)
-                        else:
-                            # Correct Way - Green Box
-                             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                             cv2.putText(frame, f"{cls_name} {track_id}", (x1, y1 - 10),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                             # Debug Text
-                             # cv2.putText(frame, f"{dy}", (x1, y1-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+                    current_lane = "LEFT" if center_x < LANE_SPLIT_X else "RIGHT"
+                    if track_id in lane_memory and lane_memory[track_id] != current_lane:
+                        lane_changes.append({
+                            "track_id": int(track_id),
+                            "from_lane": lane_memory[track_id],
+                            "to_lane": current_lane,
+                            "timestamp_ms": int(time.time() * 1000),
+                        })
+                    lane_memory[track_id] = current_lane
 
-            # Convert BGR (OpenCV) to RGB (imageio)
+                    history = track_history[track_id]
+                    if len(history) < 5:
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        continue
+
+                    prev_x, prev_y = history[0]
+                    dy = center_y - prev_y
+                    is_wrong = False
+                    if center_x < LANE_SPLIT_X:
+                        if dy < -MOVEMENT_THRESHOLD:
+                            is_wrong = True
+                    else:
+                        if dy > MOVEMENT_THRESHOLD:
+                            is_wrong = True
+
+                    direction_detected = "UP" if dy < 0 else "DOWN"
+
+                    if is_wrong:
+                        # Heatmap: add around vehicle center (15px radius, clamped)
+                        y_lo = max(0, center_y - 15)
+                        y_hi = min(frame_height, center_y + 16)
+                        x_lo = max(0, center_x - 15)
+                        x_hi = min(frame_width, center_x + 16)
+                        heatmap[y_lo:y_hi, x_lo:x_hi] += 1
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                        cv2.putText(frame, f"WRONG WAY {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        if track_id not in flagged_ids:
+                            flagged_ids.add(track_id)
+                            ts = int(time.time())
+                            filename = f"violation_{ts}_{track_id}.jpg"
+                            filepath = os.path.join(VIOLATORS_DIR, filename)
+                            cv2.imwrite(filepath, frame)
+                            violations.append({
+                                "track_id": int(track_id),
+                                "lane": current_lane,
+                                "direction_detected": direction_detected,
+                                "timestamp_ms": int(time.time() * 1000),
+                                "evidence_image_url": f"/violators/{filename}",
+                            })
+                    else:
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             writer.append_data(frame_rgb)
-            
+            frame_index += 1
+
     finally:
         cap.release()
         writer.close()
         cv2.destroyAllWindows()
 
+    # Normalize and save heatmap
+    if heatmap.max() > 0:
+        heatmap_norm = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
+        heatmap_norm = heatmap_norm.astype(np.uint8)
+        heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_JET)
+        cv2.imwrite(HEATMAP_PATH, heatmap_color)
+    else:
+        # Empty heatmap: save a blank JET image so endpoint always returns something
+        blank = np.zeros((frame_height, frame_width), dtype=np.uint8)
+        cv2.imwrite(HEATMAP_PATH, cv2.applyColorMap(blank, cv2.COLORMAP_JET))
 
-    timestamp = int(time.time() * 1000)
-    video_url = f"http://localhost:8000/video?t={timestamp}"
-    return {"video_url": video_url, "violation_count": len(flagged_ids)}
+    t = int(time.time() * 1000)
+    video_url = f"http://localhost:8000/video?t={t}"
+    return {
+        "video_url": video_url,
+        "heatmap_url": "/heatmap",
+        "total_tracked_vehicles": len(all_track_ids),
+        "wrong_way_count": len(flagged_ids),
+        "violations": violations,
+        "lane_changes": lane_changes,
+    }

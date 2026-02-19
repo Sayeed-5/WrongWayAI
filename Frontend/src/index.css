@@ -65,3 +65,244 @@
         @apply px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm border border-white/10 transition-all duration-300;
     }
 }
+
+/* Wrong-Way Detection sections (no external UI lib) */
+.wrongway-page {
+    min-height: 100vh;
+    background: #0b1120;
+    color: #e2e8f0;
+    padding: 1.5rem;
+}
+.wrongway-section {
+    margin-bottom: 2rem;
+    padding: 1.25rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(100,116,139,0.3);
+    border-radius: 12px;
+}
+.wrongway-heading {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #f8fafc;
+}
+.wrongway-muted {
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+.wrongway-upload-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.wrongway-input-hidden {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+}
+.wrongway-btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.wrongway-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+.wrongway-btn-primary {
+    background: #2563eb;
+    color: white;
+    max-width: 220px;
+}
+.wrongway-btn-primary:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+.wrongway-error {
+    color: #f87171;
+    font-size: 0.875rem;
+}
+.wrongway-video-wrap {
+    width: 100%;
+    max-width: 720px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+}
+.wrongway-video-wrap video {
+    width: 100%;
+    display: block;
+}
+.wrongway-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+}
+.wrongway-stat-card {
+    padding: 1rem;
+    background: rgba(30,41,59,0.8);
+    border-radius: 10px;
+    border: 1px solid rgba(71,85,105,0.5);
+}
+.wrongway-stat-value {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #38bdf8;
+}
+.wrongway-stat-wrong .wrongway-stat-value {
+    color: #f87171;
+}
+.wrongway-stat-label {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+.wrongway-subheading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 0.5rem;
+}
+.wrongway-heatmap-block {
+    margin-top: 1.5rem;
+}
+.wrongway-heatmap-caption {
+    margin-bottom: 0.75rem;
+}
+.wrongway-heatmap-img-wrap {
+    max-width: 640px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.5);
+}
+.wrongway-heatmap-img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.wrongway-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+.wrongway-chart-block {
+    padding: 1rem;
+    background: rgba(30,41,59,0.6);
+    border-radius: 10px;
+    border: 1px solid rgba(71,85,105,0.4);
+}
+.wrongway-bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.wrongway-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.wrongway-bar-label {
+    width: 3.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #cbd5e1;
+}
+.wrongway-bar-track {
+    flex: 1;
+    height: 1.25rem;
+    background: rgba(15,23,42,0.8);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.wrongway-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    min-width: 2px;
+    transition: width 0.3s ease;
+}
+.wrongway-bar-left {
+    background: #3b82f6;
+}
+.wrongway-bar-right {
+    background: #8b5cf6;
+}
+.wrongway-bar-lane {
+    background: #06b6d4;
+}
+.wrongway-bar-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #f8fafc;
+    min-width: 1.5rem;
+}
+.wrongway-single-bar {
+    height: 1.25rem;
+    background: rgba(15,23,42,0.8);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+.wrongway-chart-value {
+    font-size: 0.85rem;
+    margin: 0;
+}
+.wrongway-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+}
+.wrongway-card {
+    background: rgba(30,41,59,0.8);
+    border: 1px solid rgba(71,85,105,0.5);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.wrongway-card-image-wrap {
+    aspect-ratio: 16/10;
+    background: #0f172a;
+}
+.wrongway-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.wrongway-card-body {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+}
+.wrongway-card-body p {
+    margin: 0.25rem 0;
+}
+.wrongway-lane-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.wrongway-lane-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(71,85,105,0.4);
+    font-size: 0.9rem;
+}
+.wrongway-lane-item:last-child {
+    border-bottom: none;
+}
+.wrongway-lane-track {
+    font-weight: 600;
+    color: #38bdf8;
+}
+.wrongway-lane-arrow {
+    color: #cbd5e1;
+}
+.wrongway-lane-time {
+    color: #94a3b8;
+    margin-left: auto;
+}

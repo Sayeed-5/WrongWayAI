@@ -1,7 +1,27 @@
 export const API_BASE = "http://localhost:8000";
 
+export interface ViolationItem {
+  track_id: number;
+  lane: "LEFT" | "RIGHT";
+  direction_detected: "UP" | "DOWN";
+  timestamp_ms: number;
+  evidence_image_url: string;
+}
+
+export interface LaneChangeItem {
+  track_id: number;
+  from_lane: "LEFT" | "RIGHT";
+  to_lane: "LEFT" | "RIGHT";
+  timestamp_ms: number;
+}
+
 export interface UploadResponse {
   video_url: string;
+  heatmap_url: string;
+  total_tracked_vehicles: number;
+  wrong_way_count: number;
+  violations: ViolationItem[];
+  lane_changes: LaneChangeItem[];
 }
 
 export interface Violation {
