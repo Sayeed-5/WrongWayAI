@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { getViolations, deleteViolation, type Violation, API_BASE } from "../services/api";
+import { getViolations, deleteViolationImage, type Violation, API_BASE } from "../services/api";
 
 export default function ViolationReports() {
   const [violations, setViolations] = useState<Violation[]>([]);
@@ -25,11 +25,12 @@ export default function ViolationReports() {
     load();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (filename: string) => {
     try {
-      await deleteViolation(id);
-      setViolations((prev) => prev.filter((v) => v.id !== id));
-      if (selectedViolation?.id === id) {
+      setError(null);
+      await deleteViolationImage(filename);
+      setViolations((prev) => prev.filter((v) => v.filename !== filename));
+      if (selectedViolation?.filename === filename) {
         setSelectedViolation(null);
       }
     } catch (err) {
@@ -74,7 +75,7 @@ export default function ViolationReports() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
               {violations.map((violation) => (
                 <div
-                  key={violation.id}
+                  key={violation.filename}
                   className="relative group rounded-md overflow-hidden border border-white/10 hover:border-yellow-400/70"
                 >
                   <button
@@ -84,7 +85,7 @@ export default function ViolationReports() {
                   >
                     <img
                       src={`${API_BASE}${violation.image_path}`}
-                      alt={`Violation ${violation.id}`}
+                      alt={`Violation ${violation.filename}`}
                       className="w-full h-24 sm:h-28 md:h-32 object-cover transition-transform group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -97,7 +98,7 @@ export default function ViolationReports() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(violation.id);
+                      handleDelete(violation.filename);
                     }}
                     className="absolute top-1 right-1 p-1 rounded-full bg-black/70 hover:bg-red-600 text-white shadow-md"
                     aria-label="Delete violation"
@@ -136,7 +137,7 @@ export default function ViolationReports() {
               </button>
               <img
                 src={`${API_BASE}${selectedViolation.image_path}`}
-                alt={`Violation ${selectedViolation.id}`}
+                alt={`Violation ${selectedViolation.filename}`}
                 className="w-full max-h-[90vh] object-contain bg-black"
               />
             </motion.div>

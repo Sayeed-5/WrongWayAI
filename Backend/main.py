@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
+import json
 import numpy as np
 from ultralytics import YOLO
 import os
@@ -30,9 +31,55 @@ app.add_middleware(
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_VIDEO_PATH = os.path.join(BACKEND_DIR, "output.mp4")
 HEATMAP_PATH = os.path.join(BACKEND_DIR, "heatmap.jpg")
+HEATMAP_NPY_PATH = os.path.join(BACKEND_DIR, "heatmap_accumulated.npy")
+ANALYTICS_PATH = os.path.join(BACKEND_DIR, "analytics.json")
 VIOLATORS_DIR = os.path.join(BACKEND_DIR, "violators")
 
+DEFAULT_ANALYTICS = {
+    "total_videos_processed": 0,
+    "total_tracked_vehicles": 0,
+    "total_wrong_way": 0,
+    "total_lane_changes": 0,
+    "violations_per_lane": {"LEFT": 0, "RIGHT": 0},
+    "heatmap_accumulated": "heatmap.jpg",
+}
+
 os.makedirs(VIOLATORS_DIR, exist_ok=True)
+
+
+def load_analytics():
+    if os.path.exists(ANALYTICS_PATH):
+        with open(ANALYTICS_PATH, "r") as f:
+            return json.load(f)
+    with open(ANALYTICS_PATH, "w") as f:
+        json.dump(DEFAULT_ANALYTICS, f, indent=2)
+    return dict(DEFAULT_ANALYTICS)
+
+
+def save_analytics(data):
+    with open(ANALYTICS_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def load_heatmap_matrix(frame_height, frame_width):
+    if not os.path.exists(HEATMAP_NPY_PATH):
+        return np.zeros((frame_height, frame_width), dtype=np.float32)
+    prev = np.load(HEATMAP_NPY_PATH)
+    if prev.shape == (frame_height, frame_width):
+        return prev.copy()
+    # Resize to current frame size for accumulation
+    return cv2.resize(prev, (frame_width, frame_height), interpolation=cv2.INTER_LINEAR)
+
+
+def save_heatmap_matrix(matrix):
+    np.save(HEATMAP_NPY_PATH, matrix)
+    if matrix.max() > 0:
+        heatmap_norm = cv2.normalize(matrix, None, 0, 255, cv2.NORM_MINMAX)
+    else:
+        heatmap_norm = matrix.astype(np.float32)
+    heatmap_norm = heatmap_norm.astype(np.uint8)
+    heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_JET)
+    cv2.imwrite(HEATMAP_PATH, heatmap_color)
 app.mount("/violators", StaticFiles(directory=VIOLATORS_DIR), name="violators")
 
 # Model
@@ -54,6 +101,12 @@ MAX_HISTORY = 20
 VEHICLE_CLASSES = [2, 3, 5, 7]  # COCO: car, motorcycle, bus, truck
 
 
+@app.get("/analytics")
+def get_analytics():
+    data = load_analytics()
+    return data
+
+
 @app.get("/heatmap")
 def get_heatmap():
     if not os.path.exists(HEATMAP_PATH):
@@ -63,6 +116,35 @@ def get_heatmap():
         media_type="image/jpeg",
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
+
+
+@app.get("/violations")
+def get_violations():
+    """Return list of violation images in the violators folder (no database)."""
+    out = []
+    for i, name in enumerate(sorted(os.listdir(VIOLATORS_DIR))):
+        if name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+            out.append({
+                "id": i,
+                "filename": name,
+                "image_path": f"/violators/{name}",
+            })
+    return out
+
+
+@app.delete("/violation-image")
+def delete_violation_image(filename: str):
+    """Delete a violation image file by name (e.g. violation_123_1.jpg)."""
+    if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filepath = os.path.join(VIOLATORS_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        os.remove(filepath)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "Deleted"}
 
 
 @app.get("/video")
@@ -91,11 +173,6 @@ async def upload_video(file: UploadFile = File(...)):
             os.remove(os.path.join(VIOLATORS_DIR, f))
         except OSError:
             pass
-    if os.path.exists(HEATMAP_PATH):
-        try:
-            os.remove(HEATMAP_PATH)
-        except OSError:
-            pass
 
     with open(input_path, "wb") as f:
         f.write(await file.read())
@@ -120,6 +197,7 @@ async def upload_video(file: UploadFile = File(...)):
     violations = []
     lane_changes = []
     all_track_ids = set()
+    heatmap_base = load_heatmap_matrix(frame_height, frame_width)
     heatmap = np.zeros((frame_height, frame_width), dtype=np.float32)
 
     LANE_SPLIT_X = frame_width // 2
@@ -219,16 +297,25 @@ async def upload_video(file: UploadFile = File(...)):
         writer.close()
         cv2.destroyAllWindows()
 
-    # Normalize and save heatmap
-    if heatmap.max() > 0:
-        heatmap_norm = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
-        heatmap_norm = heatmap_norm.astype(np.uint8)
-        heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_JET)
-        cv2.imwrite(HEATMAP_PATH, heatmap_color)
-    else:
-        # Empty heatmap: save a blank JET image so endpoint always returns something
-        blank = np.zeros((frame_height, frame_width), dtype=np.uint8)
-        cv2.imwrite(HEATMAP_PATH, cv2.applyColorMap(blank, cv2.COLORMAP_JET))
+    # Cumulative heatmap: add this run to previous and save
+    heatmap_accumulated = heatmap_base + heatmap
+    save_heatmap_matrix(heatmap_accumulated)
+
+    # Persist analytics
+    violations_per_lane = {"LEFT": 0, "RIGHT": 0}
+    for v in violations:
+        violations_per_lane[v["lane"]] = violations_per_lane.get(v["lane"], 0) + 1
+    analytics = load_analytics()
+    analytics["total_videos_processed"] = analytics.get("total_videos_processed", 0) + 1
+    analytics["total_tracked_vehicles"] = analytics.get("total_tracked_vehicles", 0) + len(all_track_ids)
+    analytics["total_wrong_way"] = analytics.get("total_wrong_way", 0) + len(flagged_ids)
+    analytics["total_lane_changes"] = analytics.get("total_lane_changes", 0) + len(lane_changes)
+    analytics["violations_per_lane"] = {
+        "LEFT": analytics.get("violations_per_lane", {}).get("LEFT", 0) + violations_per_lane["LEFT"],
+        "RIGHT": analytics.get("violations_per_lane", {}).get("RIGHT", 0) + violations_per_lane["RIGHT"],
+    }
+    analytics["heatmap_accumulated"] = "heatmap.jpg"
+    save_analytics(analytics)
 
     t = int(time.time() * 1000)
     video_url = f"http://localhost:8000/video?t={t}"

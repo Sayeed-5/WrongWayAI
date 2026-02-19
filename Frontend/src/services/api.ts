@@ -1,5 +1,20 @@
 export const API_BASE = "http://localhost:8000";
 
+export interface Analytics {
+  total_videos_processed: number;
+  total_tracked_vehicles: number;
+  total_wrong_way: number;
+  total_lane_changes: number;
+  violations_per_lane: { LEFT: number; RIGHT: number };
+  heatmap_accumulated: string;
+}
+
+export async function getAnalytics(): Promise<Analytics> {
+  const response = await fetch(`${API_BASE}/analytics`);
+  if (!response.ok) throw new Error(`Failed to load analytics (${response.status})`);
+  return response.json() as Promise<Analytics>;
+}
+
 export interface ViolationItem {
   track_id: number;
   lane: "LEFT" | "RIGHT";
@@ -24,12 +39,11 @@ export interface UploadResponse {
   lane_changes: LaneChangeItem[];
 }
 
+/** Violation from GET /violations (file-based, no DB). */
 export interface Violation {
   id: number;
-  track_id: number;
-  timestamp: number;
+  filename: string;
   image_path: string;
-  video_timestamp: string;
 }
 
 export async function uploadVideo(file: File): Promise<UploadResponse> {
@@ -77,6 +91,21 @@ export async function deleteViolation(id: number): Promise<void> {
     const message =
       (errData as { detail?: string }).detail ||
       `Failed to delete violation (${response.status})`;
+    throw new Error(message);
+  }
+}
+
+/** Delete a violation image file by filename (e.g. violation_123_1.jpg). */
+export async function deleteViolationImage(filename: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/violation-image?filename=${encodeURIComponent(filename)}`,
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    const message =
+      (errData as { detail?: string }).detail ||
+      `Failed to delete image (${response.status})`;
     throw new Error(message);
   }
 }

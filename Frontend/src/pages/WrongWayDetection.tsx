@@ -49,7 +49,23 @@ export default function WrongWayDetection() {
           </section>
 
           <Dashboard data={result} />
-          <Violations items={result.violations} />
+          <Violations
+            items={result.violations}
+            onDelete={(violation) => {
+              setResult((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      violations: prev.violations.filter(
+                        (v) =>
+                          v.evidence_image_url !== violation.evidence_image_url ||
+                          v.timestamp_ms !== violation.timestamp_ms
+                      ),
+                    }
+                  : null
+              );
+            }}
+          />
           <LaneChanges items={result.lane_changes} />
         </>
       )}

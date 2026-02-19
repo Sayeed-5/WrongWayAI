@@ -262,9 +262,33 @@
     border-radius: 10px;
     overflow: hidden;
 }
+.wrongway-card-clickable .wrongway-card-image-wrap {
+    cursor: pointer;
+}
 .wrongway-card-image-wrap {
     aspect-ratio: 16/10;
     background: #0f172a;
+    position: relative;
+    display: block;
+    width: 100%;
+    border: none;
+    padding: 0;
+    text-align: left;
+}
+.wrongway-card-image-wrap:hover .wrongway-card-view-hint {
+    opacity: 1;
+}
+.wrongway-card-view-hint {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    color: #e2e8f0;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
 }
 .wrongway-card-image {
     width: 100%;
@@ -277,6 +301,95 @@
 }
 .wrongway-card-body p {
     margin: 0.25rem 0;
+}
+.wrongway-card-delete {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    color: #f87171;
+    background: rgba(248,113,113,0.15);
+    border: 1px solid rgba(248,113,113,0.4);
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.wrongway-card-delete:hover:not(:disabled) {
+    background: rgba(248,113,113,0.25);
+}
+.wrongway-card-delete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.wrongway-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 1rem;
+}
+.wrongway-modal-content {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.5);
+    border-radius: 12px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.wrongway-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(71,85,105,0.4);
+    gap: 0.5rem;
+}
+.wrongway-modal-close,
+.wrongway-modal-delete {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+}
+.wrongway-modal-close {
+    background: rgba(71,85,105,0.5);
+    color: #e2e8f0;
+}
+.wrongway-modal-close:hover {
+    background: rgba(71,85,105,0.7);
+}
+.wrongway-modal-delete {
+    background: rgba(248,113,113,0.2);
+    color: #f87171;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.wrongway-modal-delete:hover:not(:disabled) {
+    background: rgba(248,113,113,0.35);
+}
+.wrongway-modal-delete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.wrongway-modal-img {
+    max-height: 75vh;
+    width: auto;
+    object-fit: contain;
+    background: #000;
+}
+.wrongway-modal-caption {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    border-top: 1px solid rgba(71,85,105,0.4);
 }
 .wrongway-lane-list {
     list-style: none;
