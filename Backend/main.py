@@ -107,6 +107,38 @@ def get_analytics():
     return data
 
 
+@app.post("/reset")
+def reset_analytics():
+    # 1. Reset analytics definition
+    save_analytics(DEFAULT_ANALYTICS)
+
+    # 2. Remove heatmap files
+    for p in [HEATMAP_PATH, HEATMAP_NPY_PATH]:
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+    # 3. Clear violators directory
+    if os.path.exists(VIOLATORS_DIR):
+        for f in os.listdir(VIOLATORS_DIR):
+            fp = os.path.join(VIOLATORS_DIR, f)
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
+
+    # 4. Remove last output video
+    if os.path.exists(OUTPUT_VIDEO_PATH):
+        try:
+            os.remove(OUTPUT_VIDEO_PATH)
+        except OSError:
+            pass
+
+    return {"message": "All analytics and data reset successfully."}
+
+
 @app.get("/heatmap")
 def get_heatmap():
     if not os.path.exists(HEATMAP_PATH):

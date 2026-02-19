@@ -15,6 +15,15 @@ export async function getAnalytics(): Promise<Analytics> {
   return response.json() as Promise<Analytics>;
 }
 
+export async function resetAnalytics(): Promise<void> {
+  const response = await fetch(`${API_BASE}/reset`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to reset analytics (${response.status})`);
+  }
+}
+
 export interface ViolationItem {
   track_id: number;
   lane: "LEFT" | "RIGHT";

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getAnalytics, API_BASE, type Analytics } from "../services/api";
+import { getAnalytics, resetAnalytics, API_BASE, type Analytics } from "../services/api";
 
 const defaultAnalytics: Analytics = {
   total_videos_processed: 0,
@@ -31,6 +31,19 @@ export default function Dashboard() {
     }
   };
 
+  const handleReset = async () => {
+    if (!window.confirm("Are you sure you want to reset all analytics and clear data?")) return;
+    try {
+      setLoading(true);
+      await resetAnalytics();
+      setHeatmapError(false); // Reset heatmap error state
+      await fetchAnalytics();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset analytics");
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchAnalytics();
   }, []);
@@ -49,11 +62,11 @@ export default function Dashboard() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={fetchAnalytics}
+            onClick={handleReset}
             disabled={loading}
             className="px-3 py-1.5 text-sm rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 text-white"
           >
-            {loading ? "Loading…" : "Refresh"}
+            {loading ? "Processing…" : "Refresh & Reset"}
           </button>
           <Link
             to="/dashboard/wrong-way"
