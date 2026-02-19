@@ -13,6 +13,8 @@ from ultralytics import YOLO
 import os
 import time
 import imageio
+import requests
+
 
 app = FastAPI()
 
@@ -45,6 +47,37 @@ DEFAULT_ANALYTICS = {
 }
 
 os.makedirs(VIOLATORS_DIR, exist_ok=True)
+
+
+# =========================
+# TELEGRAM CONFIG
+# =========================
+TELEGRAM_BOT_TOKEN = "8233963789:AAHbNUKJ-X0BoFln4Xz-hi-CRcbVWKPbGac"
+TELEGRAM_CHAT_ID = "5504269123"
+
+def send_telegram_alert(image_path, track_id, lane, direction):
+    message = f"""
+🚨 WRONG-WAY ALERT 🚨
+
+Vehicle ID: {track_id}
+Lane: {lane}
+Direction: {direction}
+Time: {time.strftime('%H:%M:%S')}
+"""
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+
+    try:
+        with open(image_path, "rb") as photo:
+            files = {"photo": photo}
+            data = {
+                "chat_id": TELEGRAM_CHAT_ID,
+                "caption": message
+            }
+            requests.post(url, data=data, files=files)
+    except Exception as e:
+        print("Telegram alert failed:", e)
+
 
 
 def load_analytics():
@@ -296,20 +329,28 @@ async def upload_video(file: UploadFile = File(...)):
                     direction_detected = "UP" if dy < 0 else "DOWN"
 
                     if is_wrong:
-                        # Heatmap: add around vehicle center (15px radius, clamped)
+                        # Heatmap logic remains same
                         y_lo = max(0, center_y - 15)
                         y_hi = min(frame_height, center_y + 16)
                         x_lo = max(0, center_x - 15)
                         x_hi = min(frame_width, center_x + 16)
                         heatmap[y_lo:y_hi, x_lo:x_hi] += 1
+
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                        cv2.putText(frame, f"WRONG WAY {track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        cv2.putText(frame, f"WRONG WAY {track_id}", (x1, y1 - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
                         if track_id not in flagged_ids:
                             flagged_ids.add(track_id)
+
                             ts = int(time.time())
                             filename = f"violation_{ts}_{track_id}.jpg"
                             filepath = os.path.join(VIOLATORS_DIR, filename)
                             cv2.imwrite(filepath, frame)
+
+                            # 🔥 TELEGRAM ALERT
+                            send_telegram_alert(filepath, track_id, current_lane, direction_detected)
+
                             violations.append({
                                 "track_id": int(track_id),
                                 "lane": current_lane,
