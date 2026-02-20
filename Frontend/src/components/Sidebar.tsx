@@ -19,7 +19,6 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { name: "Live Monitoring", path: "/dashboard/live", icon: Camera },
   { name: "Wrong-Way Detection", path: "/dashboard/wrong-way", icon: AlertTriangle },
   { name: "Violation Reports", path: "/dashboard/violations", icon: FileText },
 ];

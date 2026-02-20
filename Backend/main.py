@@ -1,7 +1,4 @@
-"""
-AI-Based Wrong-Way Vehicle Detection - Backend
-FastAPI + OpenCV + Ultralytics YOLOv8 + ByteTrack. No database.
-"""
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
