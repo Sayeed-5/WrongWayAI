@@ -392,7 +392,7 @@ async def upload_video(file: UploadFile = File(...)):
     save_analytics(analytics)
 
     t = int(time.time() * 1000)
-    video_url = f"http://localhost:8000/video?t={t}"
+    video_url = f"/video?t={t}"
     return {
         "video_url": video_url,
         "heatmap_url": "/heatmap",

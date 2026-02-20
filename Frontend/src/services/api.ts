@@ -1,4 +1,4 @@
-export const API_BASE = "http://localhost:8000";
+export const API_BASE = "https://wrongwayai.onrender.com";
 
 export interface Analytics {
   total_videos_processed: number;
@@ -7,7 +7,7 @@ export interface Analytics {
   total_lane_changes: number;
   violations_per_lane: { LEFT: number; RIGHT: number };
   heatmap_accumulated: string;
-}
+} 
 
 export async function getAnalytics(): Promise<Analytics> {
   const response = await fetch(`${API_BASE}/analytics`);
