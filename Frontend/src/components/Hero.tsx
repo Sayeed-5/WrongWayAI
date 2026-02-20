@@ -172,9 +172,9 @@ export default function Hero() {
             Enhance Road Safety with AI-Powered, Real-Time Monitoring
           </h2>
 
-          <button className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg shadow-lg transition">
+          <a href="/login"><button className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg shadow-lg transition">
             Get Started
-          </button>
+          </button></a>
 
         </div>
 
