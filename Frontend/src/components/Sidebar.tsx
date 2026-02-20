@@ -21,6 +21,8 @@ const menuItems: MenuItem[] = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { name: "Wrong-Way Detection", path: "/dashboard/wrong-way", icon: AlertTriangle },
   { name: "Violation Reports", path: "/dashboard/violations", icon: FileText },
+  { name: "Live Monitoring", path: "/dashboard/live", icon: Camera },
+  { name: "Number Plate Recognition", path: "/dashboard/anpr", icon: Camera },
 ];
 
 interface SidebarProps {
