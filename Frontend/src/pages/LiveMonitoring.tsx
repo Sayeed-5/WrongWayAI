@@ -2,28 +2,28 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
-import { io } from "socket.io-client";
+// import { io } from "socket.io-client";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
-const socket = io(SOCKET_URL);
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://wrongwayai.onrender.com/";
+// const socket = io(SOCKET_URL);
 
 export default function LiveMonitoring() {
   const [incident, setIncident] = useState(false);
   const [plateData, setPlateData] = useState("ABC1234");
   const [vehicleCount, setVehicleCount] = useState(32);
 
-  useEffect(() => {
-    socket.on("traffic-update", (data: { vehicles: number; wrongWay: boolean; plate: string }) => {
-      setVehicleCount(data.vehicles);
-      setIncident(data.wrongWay);
-      setPlateData(data.plate);
-    });
-    return () => {
-      socket.off("traffic-update");
-    };
-  }, []);
+  // useEffect(() => {
+  //   socket.on("traffic-update", (data: { vehicles: number; wrongWay: boolean; plate: string }) => {
+  //     setVehicleCount(data.vehicles);
+  //     setIncident(data.wrongWay);
+  //     setPlateData(data.plate);
+  //   });
+  //   return () => {
+  //     socket.off("traffic-update");
+  //   };
+  // }, []);
 
   return (
     <div className="min-h-screen bg-[#0b1120] text-white p-4 sm:p-6">
